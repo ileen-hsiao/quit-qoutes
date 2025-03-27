@@ -2,51 +2,95 @@
 
 import { useEffect, useState } from "react"
 
+const QUOTES = [
+  "你現在不做，老闆也不會在意。",
+  "離職是給自己最大的尊重。",
+  "你不是在上班，你是在消耗生命。",
+  "每天都想離職，那就不是你想要的生活。",
+  "你的 KPI 不是公司的業績，是自己的快樂。",
+  "你不快樂，不值得。",
+  "如果每天醒來都不想上班，那就該換個夢。",
+]
+
+function getRandomQuote(quotes: string[], lastSeen?: string) {
+  const availableQuotes = quotes.filter(q => q !== lastSeen)
+  return availableQuotes[Math.floor(Math.random() * availableQuotes.length)]
+}
+
+function getDaysLeft(targetDateStr: string): number {
+  const now = new Date()
+  const targetDate = new Date(targetDateStr)
+  const diff = targetDate.getTime() - now.getTime()
+  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+}
+
 export default function Home() {
   const [quote, setQuote] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [quitDate, setQuitDate] = useState("")
+  const [daysLeft, setDaysLeft] = useState<number | null>(null)
 
   useEffect(() => {
-    const fetchGptQuote = async () => {
-      try {
-        const res = await fetch("/api/gpt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic: "離職", style: "療癒系" }),
-        })
-        const data = await res.json()
-        setQuote(data.quote)
-      } catch (error) {
-        setQuote("今天 GPT 沒有靈感 🥲")
-      } finally {
-        setLoading(false)
-      }
+    const savedDate = localStorage.getItem("quit-date")
+    if (savedDate) {
+      setQuitDate(savedDate)
+      setDaysLeft(getDaysLeft(savedDate))
     }
 
-    fetchGptQuote()
+    const stored = JSON.parse(localStorage.getItem("quote-daily") || "{}")
+    const today = new Date().toDateString()
+    if (stored.date === today && stored.quote) {
+      setQuote(stored.quote)
+    } else {
+      const newQuote = getRandomQuote(QUOTES, stored.quote)
+      setQuote(newQuote)
+      localStorage.setItem("quote-daily", JSON.stringify({ date: today, quote: newQuote }))
+    }
   }, [])
 
-  const refreshQuote = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/gpt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: "離職", style: "療癒系" }),
-      })
-      const data = await res.json()
-      setQuote(data.quote)
-    } catch (error) {
-      setQuote("今天 GPT 沒有靈感 🥲")
-    } finally {
-      setLoading(false)
-    }
+  const refreshQuote = () => {
+    const newQuote = getRandomQuote(QUOTES, quote)
+    setQuote(newQuote)
+    const today = new Date().toDateString()
+    localStorage.setItem("quote-daily", JSON.stringify({ date: today, quote: newQuote }))
+  }
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setQuitDate(value)
+    localStorage.setItem("quit-date", value)
+    setDaysLeft(getDaysLeft(value))
+  }
+
+  const getCountdownTextClass = () => {
+    if (daysLeft === null) return ""
+    if (daysLeft > 0) return "text-sky-300"
+    if (daysLeft < 0) return "text-green-300"
+    return "text-rose-500"
   }
 
   return (
     <main className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-white to-rose-100 p-4 text-center">
+      <div className="mb-6">
+        <label className="block mb-2 text-sm">離職日期：</label>
+        <input
+          type="date"
+          value={quitDate}
+          onChange={handleDateChange}
+          className="px-3 py-2 rounded-xl border border-gray-300"
+        />
+        {daysLeft !== null && (
+          <p className={`mt-3 text-2xl font-bold ${getCountdownTextClass()}`}>
+            {daysLeft > 0
+              ? `還有 ${daysLeft} 天離職！`
+              : daysLeft === 0
+              ? "今天就是離職日 🎉"
+              : `你已經離職 ${Math.abs(daysLeft)} 天了 🕊️`}
+          </p>
+        )}
+      </div>
+
       <div className="bg-white shadow-xl rounded-2xl p-6 max-w-md text-xl font-semibold">
-        {loading ? "GPT 正在想句子..." : quote}
+        {quote}
       </div>
       <button
         onClick={refreshQuote}
